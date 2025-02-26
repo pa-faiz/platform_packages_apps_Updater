@@ -44,8 +44,15 @@ android_app {
 
     required: [
         "privapp_whitelist_com.libremobileos.updater",
-        "default-permissions_com.libremobileos.updater"
+        "default-permissions_com.libremobileos.updater",
+        "init.somethingos-updater.rc"
     ],
+}
+
+prebuilt_etc {
+    name: "init.somethingos-updater.rc",
+    src: "init.somethingos-updater.rc",
+    sub_dir: "init",
 }
 
 prebuilt_etc {
