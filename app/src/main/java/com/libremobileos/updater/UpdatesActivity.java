@@ -7,6 +7,7 @@ package com.libremobileos.updater;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -39,6 +40,7 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -52,6 +54,7 @@ import com.libremobileos.updater.download.DownloadClient;
 import com.libremobileos.updater.misc.Constants;
 import com.libremobileos.updater.misc.StringGenerator;
 import com.libremobileos.updater.misc.Utils;
+import com.libremobileos.updater.model.Update;
 import com.libremobileos.updater.model.UpdateInfo;
 import com.libremobileos.updater.ui.PreferenceSheet;
 import com.google.android.material.appbar.CollapsingToolbarLayout;
@@ -65,7 +68,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public class UpdatesActivity extends UpdatesListActivity {
+public class UpdatesActivity extends UpdatesListActivity implements UpdateImporter.Callbacks {
 
     private static final String TAG = "UpdatesActivity";
     private UpdaterService mUpdaterService;
@@ -94,10 +97,15 @@ public class UpdatesActivity extends UpdatesListActivity {
                 }
             });
 
+    private UpdateImporter mUpdateImporter;
+    @SuppressWarnings("deprecation")
+    private ProgressDialog importDialog;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_updates);
+        mUpdateImporter = new UpdateImporter(this, this);
         actionCheck = findViewById(R.id.actionCheck);
         pullToRefresh = findViewById(R.id.updates_swipe_container);
         RelativeLayout actionStart = findViewById(R.id.actionStart);
@@ -161,6 +169,17 @@ public class UpdatesActivity extends UpdatesListActivity {
     }
 
     @Override
+    protected void onPause() {
+        if (importDialog != null) {
+            importDialog.dismiss();
+            importDialog = null;
+            mUpdateImporter.stopImport();
+        }
+
+        super.onPause();
+    }
+
+    @Override
     public void onStop() {
         LocalBroadcastManager.getInstance(this).unregisterReceiver(mBroadcastReceiver);
         if (mUpdaterService != null) {
@@ -173,6 +192,59 @@ public class UpdatesActivity extends UpdatesListActivity {
     public boolean onSupportNavigateUp() {
         onBackPressed();
         return true;
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        if (!mUpdateImporter.onResult(requestCode, resultCode, data)) {
+            super.onActivityResult(requestCode, resultCode, data);
+        }
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onImportStarted() {
+        if (importDialog != null && importDialog.isShowing()) {
+            importDialog.dismiss();
+        }
+
+        importDialog = ProgressDialog.show(this, getString(R.string.local_update_import),
+                getString(R.string.local_update_import_progress), true, false);
+    }
+
+    @Override
+    public void onImportCompleted(Update update) {
+        if (importDialog != null) {
+            importDialog.dismiss();
+            importDialog = null;
+        }
+
+        if (update == null) {
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.local_update_import)
+                    .setMessage(R.string.local_update_import_failure)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show();
+            return;
+        }
+
+        mAdapter.notifyDataSetChanged();
+
+        final Runnable deleteUpdate = () -> UpdaterController.getInstance(this)
+                .deleteUpdate(update.getDownloadId());
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.local_update_import)
+                .setMessage(getString(R.string.local_update_import_success, update.getVersion()))
+                .setPositiveButton(R.string.local_update_import_install, (dialog, which) -> {
+                    mAdapter.addItem(update.getDownloadId());
+                    // Update UI
+                    getUpdatesList();
+                    Utils.triggerUpdate(this, update.getDownloadId());
+                })
+                .setNegativeButton(android.R.string.cancel, (dialog, which) -> deleteUpdate.run())
+                .setOnCancelListener((dialog) -> deleteUpdate.run())
+                .show();
     }
 
     private final ServiceConnection mConnection = new ServiceConnection() {
@@ -318,6 +390,10 @@ public class UpdatesActivity extends UpdatesListActivity {
     }
 
     private void handleDownloadStatusChange(String downloadId) {
+        if (Update.LOCAL_ID.equals(downloadId)) {
+            return;
+        }
+
         if (mUpdaterService == null)
             return;
 

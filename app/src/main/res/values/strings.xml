@@ -163,4 +163,10 @@
     <string name="about_this_update">About this update</string>
     <string name="notes">Notes</string>
     <string name="update_notes">∘ Keep your phone connected to a network throughout the update.\n∘ Make sure your device has at least 30% battery.\n∘ Do not use your phone or device until the update is complete.</string>
+    <string name="local_update_import">Local update</string>
+    <string name="local_update_import_progress">Importing local update\u2026</string>
+    <string name="local_update_import_success">%1$s has been imported. Do you want to install it?</string>
+    <string name="local_update_import_failure">Failed to import local update</string>
+    <string name="local_update_import_install">Install</string>
+    <string name="local_update_name">Local update</string>
 </resources>

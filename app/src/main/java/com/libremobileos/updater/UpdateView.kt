@@ -415,6 +415,14 @@ class UpdateView : LinearLayout {
         }
     }
 
+    private fun addItem(downloadId: String) {
+        if (mDownloadIds == null) {
+            mDownloadIds = ArrayList()
+        }
+        mDownloadIds?.add(0, downloadId)
+        notifyItemInserted(0)
+    }
+
     private fun startDownloadWithWarning(downloadId: String) {
         val preferences = PreferenceManager.getDefaultSharedPreferences(mActivity)
         val warn = preferences.getBoolean(Constants.PREF_METERED_NETWORK_WARNING, true)
